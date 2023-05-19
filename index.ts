@@ -172,15 +172,23 @@ async function main(
     console.log(sharedDependencies);
     await writeToFile("shared_dependencies.md", sharedDependencies, directory);
 
-    for (let name of filepathsList) {
+    let fileGenerationTasks = filepathsList.map(async (name) => {
       let { filename, filecode } = await generateFile(
         name,
         filepathsString,
         sharedDependencies,
         prompt
       );
+      return { filename, filecode };
+    });
+
+    let fileObjects = await Promise.all(fileGenerationTasks);
+
+    let fileWritingTasks = fileObjects.map(async ({ filename, filecode }) => {
       await writeToFile(filename, filecode, directory);
-    }
+    });
+
+    await Promise.all(fileWritingTasks);
   }
 
   process.exit(0);
