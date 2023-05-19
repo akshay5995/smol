@@ -1,7 +1,8 @@
 # smol
 
-This a typescript pot of smol/developer project with minor changes.
-
+This a typescript port of [smol/developer](
+    https://github.com/smol-ai/developer
+) project with minor changes.
 
 Add .env by copying .env.example and filling in the values.
 
@@ -14,10 +15,10 @@ bun install
 To run:
 
 ```bash
-bun run index.ts "Your prompt here" <directory>
+bun run index.ts "Create a tic-tac-toe using react, tailwind"
 ```
 
 Credit to [this](
     https://github.com/smol-ai/developer
-) repository for the idea.
+) repository and [@swyx](https://github.com/sw-yx) for the idea.
 

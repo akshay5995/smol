@@ -1,57 +1,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as util from "util";
-import { ChatOpenAI } from "langchain/chat_models";
-import {
-  ChatPromptTemplate,
-  HumanMessagePromptTemplate,
-  SystemMessagePromptTemplate,
-} from "langchain/prompts";
-import { LLMChain } from "langchain";
+import { generateResponse } from "./langchain.js";
+import { extensionsToSkip } from "./constants.js";
 
-const generatedDir = "generated";
-const openai_model = "gpt-4";
-const openai_model_max_tokens = 2000;
+const generatedDir = process.env.GENERATED_DIR || "generated";
 
 let writeFile = util.promisify(fs.writeFile);
 let readFile = util.promisify(fs.readFile);
 let unlink = util.promisify(fs.unlink);
 let readdir = util.promisify(fs.readdir);
-
-const chat = new ChatOpenAI({
-  temperature: 0.5,
-  topP: 1,
-  modelName: openai_model,
-  maxTokens: openai_model_max_tokens,
-});
-
-async function generateResponse(
-  systemPrompt: string,
-  userPrompt: string,
-  args: any[] = []
-): Promise<string | undefined> {
-  try {
-    const chatPrompt = ChatPromptTemplate.fromPromptMessages([
-      SystemMessagePromptTemplate.fromTemplate(
-        systemPrompt.replaceAll("{", "").replaceAll("}", "")
-      ),
-      HumanMessagePromptTemplate.fromTemplate(
-        userPrompt.replaceAll("{", "").replaceAll("}", "")
-      ),
-    ]);
-
-    const chain = new LLMChain({
-      prompt: chatPrompt,
-      llm: chat,
-    });
-
-    const chainReponse = await chain.call({});
-
-    return chainReponse.text as string;
-  } catch (error) {
-    console.log(error);
-  }
-}
 
 async function generateFile(
   filename: string,
@@ -62,34 +20,35 @@ async function generateFile(
   let filecode = await generateResponse(
     `You are an AI developer who is trying to write a program that will generate code for the user based on their intent.
 
-        the app is: ${prompt}
+    the app is: ${prompt}
 
-        the files we have decided to generate are: ${filepathsString}
+    the files we have decided to generate are: ${filepathsString}
 
-        the shared dependencies (like filenames and variable names) we have decided on are: ${sharedDependencies}
+    the shared dependencies (like filenames and variable names) we have decided on are: ${sharedDependencies}
 
-        only write valid code for the given filepath and file type, and return only the code.
-        do not add any other explanation, only return valid code for that file type.
+    only write valid code for the given filepath and file type, and return only the code.
+    do not add any other explanation, only return valid code for that file type.
         `,
     `We have broken up the program into per-file generation.
-        Now your job is to generate only the code for the file ${filename}.
-        Make sure to have consistent filenames if you reference other files we are also generating.
+      Now your job is to generate only the code for the file ${filename}.
+      Make sure to have consistent filenames if you reference other files we are also generating.
 
-        Remember that you must obey 3 things:
-           - you are generating code for the file ${filename}
-           - do not stray from the names of the files and the shared dependencies we have decided on
-           - MOST IMPORTANT OF ALL - the purpose of our app is ${prompt} - every line of code you generate must be valid code. Do not include code fences in your response, for example
+      Remember that you MUST obey the following rules:
+          - you are to generate working code for the file ${filename}
+          - do not stray from the names of the files and the shared dependencies we have decided on
+          - MOST IMPORTANT OF ALL - the purpose of our app is ${prompt} - every line of code you generate must be valid code. Do not include code fences in your response, for example
+          - avoid bugs and logical errors, and do not generate code that is not valid for the file type
 
-        Bad response:
-        \`\`\`javascript
-        console.log("hello world")
-        \`\`\`
+      Bad response:
+      \`\`\`javascript
+      console.log("hello world")
+      \`\`\`
 
-        Good response:
-        console.log("hello world")
+      Good response:
+      console.log("hello world")
 
-        Begin generating the code now.
-        `
+      Begin generating the code now.
+      `
   );
 
   return { filename, filecode };
@@ -111,18 +70,6 @@ async function writeToFile(
 }
 
 async function cleanDir(directory: string) {
-  let extensionsToSkip = [
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".bmp",
-    ".svg",
-    ".ico",
-    ".tif",
-    ".tiff",
-  ];
-
   if (fs.existsSync(directory)) {
     let files = await readdir(directory);
     for (let file of files) {
@@ -145,24 +92,34 @@ async function main(
     prompt = await readFile(prompt).toString();
   }
 
-  console.log("hi its me, 🐣the smol developer🐣! you said you wanted:");
+  console.log("hello its me, smol! you said you wanted me to build:");
   console.log(`\x1b[92m${prompt}\x1b[0m`);
 
   let detailedPrompt = await generateResponse(
     `You are an software architect who is trying to design a program that will generate code for the user based on their intent.`,
-    `Please elaborate on the "${prompt}" by detailing the specific requirements, technical considerations, user interface, performance, privacy, error handling, and testing strategy so that the developer can write the code to meet your requirements and expectations. Make the requirements as detailed as possible and also provide the list of packages and libraries that you would use to implement the program.`
+    `Please clarify the '${prompt}' by sharing the requirements, technical needs, user interactions, and inputs, as well as error handling procedures. This will help the developer to code according to your needs.
+     Provide a detailed set of instructions for the program, making sure it's simple enough for a beginner developer to understand. Make sure your instructions are clear, straightforward, and precise.
+     Also, list all the necessary software packages and libraries needed to build the program, explaining their functions and how they fit into the project.`
   );
-
-  console.log(detailedPrompt);
 
   let filepathsString = await generateResponse(
     `You are an AI developer who is trying to write a program that will generate code for the user based on their intent.
 
-        When given their intent, create a complete, exhaustive list of filepaths that the user would write to make the program.
+    When given their intent, create a complete, exhaustive list of filepaths that the user would write to make the program work.
+    Include package.json, .gitignore, and any other files that would be generated by the user. 
+    Do not include files that can be imported from a package manager, like jquery or react.
 
-        only list the filepaths you would write, and return them as a javascript list of strings.
-        do not add any other explanation, only return a javascript list of strings.
-        `,
+    Only list the filepaths you would write, and return them as a javascript list of strings.
+    do not add any other explanation, ONLY return a valid javascript list of strings and nothing else.
+
+    Example response:
+    [
+      "package.json",
+      "src/index.js",
+      "src/index.test.js",
+      "src/index.css"
+    ]
+    `,
     detailedPrompt || prompt
   );
 
@@ -230,13 +187,15 @@ async function main(
 }
 
 let args = process.argv.slice(2);
+
 if (args.length < 1) {
   console.error("Please provide a prompt");
   process.exit(1);
 }
 
 let prompt = args[0];
-let directory = args[1] || generatedDir;
-let file = args[2];
 
-main(prompt, directory, file).catch(console.error);
+main(prompt, generatedDir).catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
