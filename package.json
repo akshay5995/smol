@@ -1,0 +1,16 @@
+{
+  "name": "smol",
+  "module": "index.ts",
+  "type": "module",
+  "author": {
+    "name": "Akshay Ram",
+    "email": "akshay5995@gmail.com"
+  },
+  "devDependencies": {
+    "bun-types": "^0.3.0"
+  },
+  "dependencies": {
+    "langchain": "^0.0.41",
+    "openai": "^3.2.1"
+  }
+}
